@@ -1,0 +1,170 @@
+# docker-compose config placeholder
+
+
+services:
+  # Database
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-albumdb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Kafka and Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CONFLUENT_METRICS_ENABLE: "false"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "kafka-topics",
+          "--bootstrap-server",
+          "localhost:9092",
+          "--list",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s # Give Kafka more time to start before first check
+
+  # Kafka setup
+  kafka-init:
+    build: ./kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:29092
+    restart: on-failure
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "5775:5775/udp" # Zipkin compatible agent port (deprecated)
+      - "6831:6831/udp" # Jaeger native agent Thrift UDP port
+      - "6832:6832/udp" # Jaeger native agent Thrift UDP port (compact)
+      - "5778:5778" # Jaeger agent serving config
+      - "16686:16686" # Jaeger UI frontend
+      - "14268:14268" # Jaeger collector Thrift HTTP endpoint
+      - "14250:14250" # Jaeger collector gRPC endpoint
+      - "9411:9411" # Zipkin compatible collector (optional)
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true # Enable OTLP receiver
+    restart: unless-stopped
+
+  # Album Service
+  album-service:
+    build: ./album-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_CONNECTION: postgres://postgres:postgres@postgres:5432/${POSTGRES_DB:-albumdb}?sslmode=disable
+      KAFKA_BROKER: kafka:29092
+      SERVICE_PORT: 8080
+      # OpenTelemetry Configuration
+      OTEL_SERVICE_NAME: album-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+    restart: unless-stopped
+
+  # Inventory Service
+  inventory-service:
+    build: ./inventory-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_CONNECTION: postgres://postgres:postgres@postgres:5432/${POSTGRES_DB:-albumdb}?sslmode=disable
+      KAFKA_BROKER: kafka:29092
+      SERVICE_PORT: 8081
+      # OpenTelemetry Configuration
+      OTEL_SERVICE_NAME: inventory-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    build: ./order-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_CONNECTION: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-albumdb}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-albumdb}
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      KAFKA_BROKER: kafka:29092
+      SERVICE_PORT: 8082
+      # OpenTelemetry Agent Configuration
+      JAVA_TOOL_OPTIONS: -javaagent:/app/opentelemetry-javaagent.jar # Load the OTel Java Agent
+      OTEL_SERVICE_NAME: order-service # Service name identifier for Jaeger
+      OTEL_TRACES_EXPORTER: otlp # Use OTLP for traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317 # Send traces to Jaeger via OTLP gRPC
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc # Force OTLP exporter to use gRPC protocol
+      OTEL_METRICS_EXPORTER: none # Disable metrics export
+      OTEL_LOGS_EXPORTER: none # Disable logs export
+      OTEL_INSTRUMENTATION_SPRING_WEB MVC_ENABLED: true # Enable Spring Web MVC instrumentation
+      OTEL_INSTRUMENTATION_JDBC_ENABLED: true # Enable JDBC instrumentation
+      OTEL_INSTRUMENTATION_KAFKA_ENABLED: true # Enable Kafka instrumentation
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+# Define networks if necessary
+# networks:
+#   default:
+#     driver: bridge

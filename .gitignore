@@ -1,0 +1,40 @@
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Runtime data
+*.pid
+
+# Environment variables
+.env*
+
+# Node modules (if any)
+node_modules/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+
+# Java / Maven
+**/target/
+*.class
+
+# Go binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go coverage output
+*.out
+
+# Docker overrides
+docker-compose.override.yml
+
+# Misc
+*~ 
