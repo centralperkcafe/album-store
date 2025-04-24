@@ -17,6 +17,19 @@ The system is built using a microservice architecture, containing the following 
 - **Jaeger**: Backend system for collecting and visualizing traces
 - **Docker**: For containerization of services and infrastructure
 
+## Project Structure
+
+```
+.
+├── album-service       # Go service for album catalog
+├── inventory-service   # Go service for inventory management
+├── order-service       # Java/Spring Boot order processing service
+├── kafka-init          # Scripts to initialize Kafka topics
+├── test                # K6 scenarios for load testing
+├── docker-compose.yml  # Compose file to run all services
+└── README.md           # Project documentation
+```
+
 ## Services and Ports
 
 | Service           | Technology         | Port  | Description                                       |
@@ -40,8 +53,8 @@ The system is built using a microservice architecture, containing the following 
 
 1.  Clone the repository:
     ```bash
-    git clone <repository-url>
-    cd <repository-name>
+    git clone https://github.com/centralperkcafe/album-store.git
+    cd album-store
     ```
 2.  Build and run all services in detached mode:
     ```bash
@@ -69,23 +82,22 @@ This system is instrumented using OpenTelemetry for distributed tracing. Traces 
 [K6](https://k6.io/) is the recommended tool for running load tests against this system.
 
 1.  **Install K6:** Follow the [official K6 installation guide](https://k6.io/docs/getting-started/installation/).
-2.  **Create Test Scripts:** Write your K6 test scripts (using JavaScript) in a directory (e.g., `loadtests/`). You can create different scripts for various scenarios like throughput testing, end-to-end latency testing, stress testing, etc. (Refer to previous conversation for test type suggestions).
+2.  **Create Test Scripts:** K6 scenario scripts are provided in the `test/` directory (e.g., `test/scenario1_success.js`).
 3.  **Run Tests:** Execute your scripts from the project root directory using:
     ```bash
-    # Example command (replace with your script path)
-    k6 run loadtests/<your_script_name>.js
+    k6 run test/<scenario_file>.js
     ```
 4.  **Analyze Results:**
     - Use the K6 output summary for key metrics (RPS, latency, error rates).
-    - **Crucially, correlate K6 results with Jaeger traces.** Observe Jaeger UI during the test run to identify bottlenecks, errors, and high-latency operations within the microservices under  load.
+    - **Crucially, correlate K6 results with Jaeger traces.** Observe Jaeger UI during the test run to identify bottlenecks, errors, and high-latency operations within the microservices under load.
 
 ## API Documentation
 
-For detailed API documentation, see [API Documentation](./docs/api-docs.md).
+API documentation is available in each service directory (`album-service`, `inventory-service`, `order-service`); refer to code comments for endpoint details.
 
 ## Message Flow
 
-For details on the event-driven communication, see [Kafka Topics](./docs/kafka-topics.md).
+Topic initialization logic is in `kafka-init/create-topics.sh`. See consumer/producer implementations in service code for event flows.
 
 ## Client Types
 
