@@ -1,4 +1,4 @@
-# Album Store MVP
+# Album Store (observability version)
 
 ## Project Overview
 
